@@ -1,98 +1,201 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import TransactionAdd from "@/components/TransactionAdd";
+import TransactionList from "@/components/TransactionList";
+import TransactionSummary from "@/components/TransactionSummary";
+import {
+  Category,
+  Transaction,
+  TransactionInput,
+  TransactionsByMonth,
+} from "@/types";
+import { useSQLiteContext } from "expo-sqlite";
+import { useEffect, useState } from "react";
+import { ScrollView, StyleSheet } from "react-native";
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+export default function Index() {
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactionsByMonth, setTransactionsByMonth] =
+    useState<TransactionsByMonth>({
+      // or literal object: {totalExpenses: number, totalIncome: number}
+      totalExpenses: 0,
+      totalIncome: 0,
+    });
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
+  const db = useSQLiteContext();
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        // Execute both queries simultaneously (in parallel)
+        // db.WithTransactionAsync is not used as the queries are only read ops
+        await Promise.all([
+          getTransactionData(),
+          getCategoriesData(),
+          getTransactionsByMonth(),
+        ]);
+      } catch (error) {
+        console.error("Failed to load data:", error);
+      }
+    };
+    loadData();
+  }, []);
+
+  async function getTransactionData() {
+    try {
+      // The returned results should be type Transaction (TS generic)
+      // The query here has been modified to use INNER JOIN
+      const result: Transaction[] = await db.getAllAsync<Transaction>(`
+        SELECT 
+        t.id as 'id', 
+        t.category_id as 'category_id', 
+        t.amount as 'amount', 
+        t.date as 'date', 
+        t.description as 'description', 
+        c.type as 'type' 
+        FROM Transactions t JOIN Categories c
+        ON t.category_id = c.id
+        ORDER BY date DESC;
+        `);
+
+      setTransactions(result);
+    } catch (error) {
+      console.log("Failed to fetch errors: ", error);
+    }
   }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
+
+  async function getCategoriesData() {
+    try {
+      const result: Category[] = await db.getAllAsync<Category>(
+        `SELECT * FROM categories;`,
+      );
+
+      setCategories(result);
+    } catch (error) {
+      console.log("Failed to fetch categories: ", error);
+    }
   }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+
+  async function deleteTransaction(id: number) {
+    try {
+      await db.withTransactionAsync(async () => {
+        // 1. Pass the id to delete as a parameterised query to prevent SQL injection
+        const result = await db.runAsync(
+          `DELETE FROM Transactions WHERE id = ?;`,
+          [id],
+        );
+
+        // 2. If the row is indeed deleted, getTransactionData() to update the data
+        if (result.changes > 0) {
+          await Promise.all([
+            getTransactionData(),
+            getCategoriesData(),
+            getTransactionsByMonth(),
+          ]);
+        } else {
+          // Implement message, id not found
+        }
+      });
+    } catch (error) {
+      console.log("Failed to delete transaction: ", error);
+    }
+  }
+
+  async function getTransactionsByMonth() {
+    try {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+
+      // Set to the first day of the current month
+      const startMonth = new Date(year, month, 1);
+
+      // Get the first day of the next month
+      const endMonth = new Date(year, month + 1, 1);
+
+      // Then subtract by 1 ms to get the end of the current month
+      endMonth.setMilliseconds(endMonth.getMilliseconds() - 1);
+
+      // Convert to Unix TimeStamp (seconds)
+      const startOfMonthTimeStamp = Math.floor(startMonth.getTime() / 1000);
+      const endOfMonthTimeStamp = Math.floor(endMonth.getTime() / 1000);
+
+      const transactionByMonth = await db.getAllAsync<TransactionsByMonth>(
+        `
+      SELECT 
+      COALESCE(SUM(CASE WHEN type = 'Expense' THEN amount ELSE 0 END), 0) AS totalExpenses, 
+      COALESCE(SUM(CASE WHEN type = 'Income' THEN amount ELSE 0 END), 0) AS totalIncome
+      FROM (
+        SELECT 
+        t.id AS id, 
+        t.category_id AS category_id, 
+        t.amount AS amount, 
+        t.date AS date, 
+        t.description AS description, 
+        c.type AS type 
+        FROM Transactions t JOIN Categories c
+        ON t.category_id = c.id
+      ) AS result
+      WHERE date >= ? AND date <= ?;
+    `,
+        [startOfMonthTimeStamp, endOfMonthTimeStamp],
+      );
+
+      setTransactionsByMonth(transactionByMonth[0]);
+    } catch (error) {
+      console.log("Failed to fetch errors: ", error);
+    }
+  }
+
+  async function insertTransaction(transactionInput: TransactionInput) {
+    try {
+      db.withTransactionAsync(async () => {
+        const result = await db.runAsync(
+          // 1. Pass the id to delete as a parameterised query to prevent SQL injection
+          `INSERT INTO Transactions (amount, description, category_id, date) VALUES (?, ?, ?, ?)`,
+          [
+            transactionInput.amount,
+            transactionInput.description,
+            transactionInput.category_id,
+            transactionInput.date,
+          ],
+        );
+
+        if (result.changes > 0) {
+          await Promise.all([
+            getTransactionData(),
+            getCategoriesData(),
+            getTransactionsByMonth(),
+          ]);
+        } else {
+          // Implement message, id not found
+          console.log("Nothing added");
+        }
+      });
+    } catch (error) {
+      console.error("Failed to load data:", error);
+    }
+  }
+
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
-
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+    <ScrollView contentContainerStyle={styles.scrollViewContainer}>
+      <TransactionSummary
+        totalExpenses={transactionsByMonth.totalExpenses}
+        totalIncome={transactionsByMonth.totalIncome}
+      />
+      <TransactionAdd insertTransaction={insertTransaction} />
+      <TransactionList
+        transactions={transactions}
+        categories={categories}
+        deleteTransaction={deleteTransaction}
+      />
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  scrollViewContainer: {
+    padding: 15,
+    paddingTop: 170,
+    paddingBottom: 50,
   },
 });

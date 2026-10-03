@@ -1,0 +1,36 @@
+my-expo-app/
+├── src/
+│   ├── app/
+│   │   ├── _layout.tsx        <-- Global providers (Auth, Themes)
+│   │   │
+│   │   └── (pages)/           <-- 📁 All your pages organized in ONE folder
+│   │       ├── _layout.tsx    <-- Defines navigation (e.g., Stack or Tabs)
+│   │       ├── index.tsx      <-- Home screen (Resolves to: /)
+│   │       ├── profile.tsx    <-- Profile screen (Resolves to: /profile)
+│   │       ├── settings.tsx   <-- Settings screen (Resolves to: /settings)
+│   │       │
+│   │       ├── auth/          <-- Subfolder for specific flows
+│   │       │   ├── login.tsx  <-- Login screen (Resolves to: /auth/login)
+│   │       │   └── signup.tsx <-- Signup screen (Resolves to: /auth/signup)
+│   │       │
+│   │       └── [id].tsx       <-- Dynamic details (Resolves to: /123)
+
+
+my-expo-app/
+├── src/
+│   ├── app/                 <-- All pages and layouts go here
+│   │   ├── _layout.tsx      <-- Root layout (e.g., defines Global Providers)
+│   │   ├── index.tsx        <-- The App's Home Screen (/)
+│   │   ├── (auth)/          <-- Group folder for authentication (hidden from URL)
+│   │   │   ├── login.tsx    <-- Resolves to /login
+│   │   │   └── register.tsx <-- Resolves to /register
+│   │   ├── (tabs)/          <-- Group folder for main navigation tabs
+│   │   │   ├── _layout.tsx  <-- Tab configuration file (sets up bottom tabs)
+│   │   │   ├── feed.tsx     <-- Resolves to /feed
+│   │   │   └── profile.tsx  <-- Resolves to /profile
+│   │   └── +not-found.tsx   <-- Fallback for broken links / 404 page
+│   │
+│   ├── components/          <-- Keep reusable UI out of the app folder!
+│   └── hooks/               <-- Reusable React hooks
+├── app.json                 <-- Expo configuration settings
+└── package.json
