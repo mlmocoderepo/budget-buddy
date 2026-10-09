@@ -51,7 +51,7 @@ function TransactionAdd({
     await insertTransaction({
       category_id: categoryId,
       amount: Number(amount),
-      date: new Date().getTime() / 1000,
+      date: Math.floor(new Date().getTime() / 1000),
       description,
     });
     handleToggleEntry();

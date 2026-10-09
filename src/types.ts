@@ -52,4 +52,23 @@ export interface TransactionDetailsProps {
 export interface TransactionsByMonth {
   totalExpenses: number;
   totalIncome: number;
+  targetMonth?: number | null | undefined;
+  targetYear?: number | null | undefined;
+}
+
+// !! Duration of data to fetch from
+export enum Period {
+  week = "week",
+  month = "month",
+  year = "year",
+}
+
+// !! Start and end date on the data to fetch
+export interface WeekRange {
+  startDate: number;
+  endDate: number;
+}
+export interface WeekAmount {
+  day_of_week: number;
+  total: number;
 }

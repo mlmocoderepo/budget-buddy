@@ -5,11 +5,19 @@ import Card from "./ui/Card";
 export default function TransactionSummary({
   totalExpenses,
   totalIncome,
+  targetMonth,
+  targetYear,
 }: TransactionsByMonth) {
-  const readablePeriod = new Date().toLocaleDateString("default", {
-    month: "long",
-    year: "numeric",
-  });
+  const hasTargetDate = targetMonth != null && targetYear != null;
+  const readablePeriod = hasTargetDate
+    ? new Date(targetYear, targetMonth).toLocaleDateString("default", {
+        month: "short",
+        year: "numeric",
+      })
+    : new Date().toLocaleDateString("default", {
+        month: "short",
+        year: "numeric",
+      });
 
   // Function to determine the style based on the value (positive or negative)
   const getMoneyTextStyle = (value: number): TextStyle => ({
@@ -59,6 +67,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "bold",
     color: "#333",
+    paddingBottom: 10,
   },
   textSummary: {
     fontSize: 18,

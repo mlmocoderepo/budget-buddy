@@ -1,3 +1,4 @@
+import ChartSummary from "@/components/ChartSummary";
 import TransactionAdd from "@/components/TransactionAdd";
 import TransactionList from "@/components/TransactionList";
 import TransactionSummary from "@/components/TransactionSummary";
@@ -19,6 +20,8 @@ export default function Index() {
       // or literal object: {totalExpenses: number, totalIncome: number}
       totalExpenses: 0,
       totalIncome: 0,
+      targetMonth: null,
+      targetYear: null,
     });
 
   const db = useSQLiteContext();
@@ -100,11 +103,14 @@ export default function Index() {
     }
   }
 
-  async function getTransactionsByMonth() {
+  async function getTransactionsByMonth(
+    targetMonth: number | null = null,
+    targetYear: number | null = null,
+  ) {
     try {
       const now = new Date();
-      const year = now.getFullYear();
-      const month = now.getMonth();
+      const year = targetYear ?? now.getFullYear();
+      const month = targetMonth ?? now.getMonth();
 
       // Set to the first day of the current month
       const startMonth = new Date(year, month, 1);
@@ -140,7 +146,12 @@ export default function Index() {
         [startOfMonthTimeStamp, endOfMonthTimeStamp],
       );
 
-      setTransactionsByMonth(transactionByMonth[0]);
+      setTransactionsByMonth({
+        totalExpenses: transactionByMonth[0]?.totalExpenses ?? 0,
+        totalIncome: transactionByMonth[0]?.totalIncome ?? 0,
+        targetMonth: month,
+        targetYear: year,
+      });
     } catch (error) {
       console.log("Failed to fetch errors: ", error);
     }
@@ -178,11 +189,14 @@ export default function Index() {
 
   return (
     <ScrollView contentContainerStyle={styles.scrollViewContainer}>
+      <TransactionAdd insertTransaction={insertTransaction} />
+      <ChartSummary getTransactionsByMonth={getTransactionsByMonth} />
       <TransactionSummary
         totalExpenses={transactionsByMonth.totalExpenses}
         totalIncome={transactionsByMonth.totalIncome}
+        targetMonth={transactionsByMonth.targetMonth}
+        targetYear={transactionsByMonth.targetYear}
       />
-      <TransactionAdd insertTransaction={insertTransaction} />
       <TransactionList
         transactions={transactions}
         categories={categories}
